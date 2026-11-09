@@ -10,6 +10,7 @@ data/liftoff/
 data/tools/
 # recorded frames and labels (2.4 GB) and the rehearsal/replay outputs; data/oddcourse stays tracked
 data/vision/
+data/tpost_detection.png
 data/rehearse/
 data/replay/
 data/built/*

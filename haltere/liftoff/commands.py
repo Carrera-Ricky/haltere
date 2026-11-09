@@ -536,6 +536,29 @@ def cmd_waypoints(a):
     print(f'  haltere liftoff fly runs/imJ_best.pt --waypoints-file {a.out} --advance-radius 1.0')
 
 
+def cmd_figure_eight(a):
+    """Write a known-coordinate two-post figure-eight route for simulation."""
+    import yaml
+    from .figure_eight import generate_two_post_figure_eight
+
+    route = generate_two_post_figure_eight(
+        post_spacing=a.post_spacing,
+        orbit_radius=a.orbit_radius,
+        altitude=a.altitude,
+        points_per_orbit=a.points_per_orbit,
+        transition_points=a.transition_points,
+        repetitions=a.repetitions,
+    )
+    out = Path(a.out)
+    if out.exists():
+        raise SystemExit(f'refusing to overwrite existing route: {out}')
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(yaml.safe_dump(route, sort_keys=False), encoding='utf-8')
+    print(f'{len(route["waypoints"])} waypoints written to {out}')
+    print(f'posts: {route["posts"]}')
+    print(f'fly with: haltere liftoff fly <checkpoint.pt> --waypoints-file {out} --path-speed 1.5 --no-loop')
+
+
 def find_game_window(title_substring: str = 'Liftoff') -> int:
     """Handle of the first visible window whose title contains the text (0 when none). Windows only."""
     import ctypes

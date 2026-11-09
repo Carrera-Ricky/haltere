@@ -110,6 +110,41 @@ def cmd_eval(a):
         print(f'trajectory of environment 0 saved to {a.trajectory}')
 
 
+def cmd_eval_figure_eight(a):
+    import json
+    from collections import deque
+    import torch
+    from .train.bptt import load_checkpoint, make_world
+    from .sim.figure_eight import FigureEightTask, load_route
+
+    brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
+    device = brain.device
+    vehicle, _ = make_world(cfg, a.batch, device)
+    task = FigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
+                           speed=a.speed, post_height=a.post_height,
+                           crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius)
+    vs = vehicle.wrap(task.reset_all())
+    bs = brain.init_state(a.batch)
+    W = brain.weight_matrix()
+    delay = deque([torch.zeros(a.batch, brain.n_actions, device=device)
+                   for _ in range(cfg.train.delay_steps)])
+    total = torch.zeros(a.batch, device=device)
+    crashed_ever = torch.zeros(a.batch, dtype=torch.bool, device=device)
+    for _ in range(a.steps):
+        obs = task.observe(vs.quad)
+        act, bs, _ = brain(obs, bs, W)
+        delay.append(act)
+        action = delay.popleft()
+        vs = vehicle.step(vs, action)
+        total += task.cost(vs.quad, action)
+        crashed_ever |= vs.quad.crashed
+        task.tick(vs.quad)
+    metrics = task.metrics(vs.quad)
+    metrics.update({"cost": float((total / a.steps).mean()),
+                    "crashed_ever": float(crashed_ever.float().mean())})
+    print(json.dumps(metrics, indent=2))
+
+
 def cmd_summarize(a):
     import csv
     import json
@@ -203,7 +238,16 @@ def cmd_liftoff(a):
 def cmd_vision(a):
     import yaml
     from .vision.camera import Camera
-    if a.vision_cmd == 'audit':
+    if a.vision_cmd == 'tposts':
+        from .vision.tposts import TPostParams, detect_image
+        params = TPostParams(min_area=a.min_area)
+        detections = detect_image(a.image, params=params, overlay=a.overlay or None)
+        print(json.dumps({
+            'image': a.image,
+            'detections': detections,
+            'count': len(detections),
+        }, indent=2))
+    elif a.vision_cmd == 'audit':
         from .vision.datasets import audit_split
         report = audit_split(a.datasets, a.holdout)
         text = json.dumps(report, indent=2)
@@ -398,6 +442,19 @@ def main(argv=None):
     s.add_argument('--trajectory', default='', help='save env-0 trajectory to this .npz')
     s.set_defaults(fn=cmd_eval)
 
+    s = sp.add_parser('eval-figure-eight', help='evaluate a checkpoint on a known-coordinate two-post route')
+    s.add_argument('ckpt')
+    s.add_argument('--route', default='configs/two_post_figure8.yaml')
+    s.add_argument('--steps', type=int, default=2400)
+    s.add_argument('--batch', type=int, default=1)
+    s.add_argument('--speed', type=float, default=1.5)
+    s.add_argument('--post-height', type=float, default=3.0)
+    s.add_argument('--crossbar-width', type=float, default=2.0)
+    s.add_argument('--tpost-radius', type=float, default=0.35,
+                   help='effective collision radius around the pole/crossbar centreline (m)')
+    s.add_argument('--device', default='cpu')
+    s.set_defaults(fn=cmd_eval_figure_eight)
+
     s = sp.add_parser('publish-hf', help='upload artifacts/, the flight graph and the model card to Hugging Face')
     s.add_argument('--repo', default='', help='model repo id (default: <your account>/haltere)')
     s.add_argument('--private', action='store_true')
@@ -430,6 +487,10 @@ def main(argv=None):
 
     s = sp.add_parser('vision', help='gate vision: calibrate the FPV camera, find the gates, label frames, train GateNet')
     vs = s.add_subparsers(dest='vision_cmd', required=True)
+    q = vs.add_parser('tposts', help='detect orange T-posts in one synthetic-camera image')
+    q.add_argument('image', help='RGB image, such as haltere_camera_frame.ppm')
+    q.add_argument('--overlay', default='', help='write a copy with detection boxes drawn on it')
+    q.add_argument('--min-area', type=int, default=20, help='minimum detected blob area in pixels')
     q = vs.add_parser('audit', help='audit labelled flights and reject train/holdout overlap (including copied images)')
     q.add_argument('datasets', nargs='+')
     q.add_argument('--holdout', nargs='*', default=[])
@@ -703,6 +764,14 @@ def main(argv=None):
     q.add_argument('--min-z', type=float, default=1.0, help='clamp waypoint altitude to at least this (m above the reset point)')
     q.add_argument('--max-z', type=float, default=1e9, help='clamp waypoint altitude to at most this (m above the reset point)')
     q.add_argument('--out', default='configs/track.yaml')
+    q = ls.add_parser('figure-eight', help='generate a known-coordinate two-post figure-eight waypoint route')
+    q.add_argument('--post-spacing', type=float, default=12.0, help='distance between post centres (m)')
+    q.add_argument('--orbit-radius', type=float, default=3.0, help='centre-to-drone orbit radius (m)')
+    q.add_argument('--altitude', type=float, default=2.0, help='route altitude above the reset point (m)')
+    q.add_argument('--points-per-orbit', type=int, default=48)
+    q.add_argument('--transition-points', type=int, default=12)
+    q.add_argument('--repetitions', type=int, default=1)
+    q.add_argument('--out', default='configs/two_post_figure8.yaml')
     q = ls.add_parser('fly', help='let the trained brain fly the drone in Liftoff')
     q.add_argument('ckpt')
     q.add_argument('--port', type=int, default=9001)

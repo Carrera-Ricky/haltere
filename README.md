@@ -10,6 +10,28 @@ that goal; the fly brain remains a meaningful motor controller.
 [Models](#models-and-data) · [Game setup](docs/liftoff_setup.md) ·
 [Training](#training) · [For agents and contributors](#for-agents-and-contributors)
 
+## Shared workspace setup
+
+The repository includes a platform-agnostic setup script for contributors. It
+creates a virtual environment, installs the requested PyTorch backend, installs
+Haltere, and checks out the pinned OpenGL synthetic-camera renderer.
+
+From the repository root, run one of:
+
+```text
+python scripts/setup.py --hardware cpu
+python scripts/setup.py --hardware cuda
+python scripts/setup.py --hardware rocm
+```
+
+Use `cpu` on Windows AMD systems. The official PyTorch ROCm wheels target Linux;
+use `rocm` only on a compatible Linux AMD system. `auto` is the safe default and
+also selects CPU. Use `--skip-graphics` when the renderer is not needed.
+
+The exact GraphicsEngine repository and commit are recorded in
+`integrations/graphics_engine.json`, so peers receive the same renderer version
+until the lock file is deliberately updated.
+
 ![Connectome activity beside a brain-motor Straw Bale race at 6 m/s](docs/liftoff_fast_brain08.gif)
 
 *fast-brain-08 on Straw Bale, hilltop through the descending checkpoints, at 4×
