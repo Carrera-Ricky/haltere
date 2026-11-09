@@ -239,13 +239,14 @@ def cmd_vision(a):
     import yaml
     from .vision.camera import Camera
     if a.vision_cmd == 'tposts':
-        from .vision.tposts import TPostParams, detect_image
+        from .vision.tposts import TPostParams, detect_image, observation_from_detections
         params = TPostParams(min_area=a.min_area)
         detections = detect_image(a.image, params=params, overlay=a.overlay or None)
         print(json.dumps({
             'image': a.image,
             'detections': detections,
             'count': len(detections),
+            'observation': observation_from_detections(detections),
         }, indent=2))
     elif a.vision_cmd == 'audit':
         from .vision.datasets import audit_split

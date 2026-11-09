@@ -96,5 +96,40 @@ def detect_image(path: str | Path, params: TPostParams = TPostParams(),
     return detections
 
 
+def observation_from_detections(detections: list[dict]) -> dict:
+    """Convert raw detections into the compact observation used by navigation.
+
+    The largest image-space post is treated as the nearest candidate. This is
+    only an apparent-size ordering for now; it is not yet a metric distance.
+    """
+    if not detections:
+        return {
+            "visible": False,
+            "center_x": 0.0,
+            "center_y": 0.0,
+            "pixel_height": 0.0,
+            "pixel_width": 0.0,
+            "side": "none",
+        }
+
+    nearest = max(detections, key=lambda d: d["pixel_height"])
+    center_x = float(nearest["center_x"])
+    if center_x < -0.05:
+        side = "left"
+    elif center_x > 0.05:
+        side = "right"
+    else:
+        side = "center"
+    _, _, width, _ = nearest["bbox"]
+    return {
+        "visible": True,
+        "center_x": center_x,
+        "center_y": float(nearest["center_y"]),
+        "pixel_height": float(nearest["pixel_height"]),
+        "pixel_width": float(width),
+        "side": side,
+    }
+
+
 def params_as_dict(params: TPostParams) -> dict:
     return asdict(params)
