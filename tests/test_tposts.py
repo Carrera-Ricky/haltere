@@ -1,6 +1,7 @@
 import numpy as np
 
-from haltere.vision.tposts import detect_tposts, observation_from_detections
+from haltere.vision.tposts import (detect_tposts, estimate_distance_m,
+                                   observation_from_detections)
 
 
 def test_tpost_detection_merges_pole_and_crossbar():
@@ -37,5 +38,10 @@ def test_observation_handles_no_detection():
         "center_y": 0.0,
         "pixel_height": 0.0,
         "pixel_width": 0.0,
+        "distance_m": 0.0,
         "side": "none",
     }
+
+
+def test_distance_uses_pinhole_camera_relation():
+    assert estimate_distance_m(50.0, object_height_m=3.0, focal_length_px=200.0) == 12.0

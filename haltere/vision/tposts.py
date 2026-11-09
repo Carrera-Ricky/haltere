@@ -109,6 +109,7 @@ def observation_from_detections(detections: list[dict]) -> dict:
             "center_y": 0.0,
             "pixel_height": 0.0,
             "pixel_width": 0.0,
+            "distance_m": 0.0,
             "side": "none",
         }
 
@@ -127,8 +128,37 @@ def observation_from_detections(detections: list[dict]) -> dict:
         "center_y": float(nearest["center_y"]),
         "pixel_height": float(nearest["pixel_height"]),
         "pixel_width": float(width),
+        "distance_m": float(nearest.get("distance_m", 0.0)),
         "side": side,
     }
+
+
+def estimate_distance_m(pixel_height: float, object_height_m: float = 3.0,
+                        focal_length_px: float = 214.0) -> float:
+    """Estimate camera-axis distance from apparent object height.
+
+    This is the pinhole-camera relation ``Z = fH/h``. It assumes the bounding
+    box covers the known object's full physical height and that ``f`` has been
+    calibrated for this image resolution. The result is an estimate, not a
+    depth measurement from the framebuffer.
+    """
+    if pixel_height <= 0:
+        raise ValueError("pixel_height must be positive")
+    if object_height_m <= 0 or focal_length_px <= 0:
+        raise ValueError("object_height_m and focal_length_px must be positive")
+    return float(focal_length_px * object_height_m / pixel_height)
+
+
+def add_distance_estimates(detections: list[dict], object_height_m: float = 3.0,
+                           focal_length_px: float = 214.0) -> list[dict]:
+    """Return detections with a calibrated pinhole distance estimate attached."""
+    out = []
+    for detection in detections:
+        item = dict(detection)
+        item["distance_m"] = estimate_distance_m(
+            item["pixel_height"], object_height_m, focal_length_px)
+        out.append(item)
+    return out
 
 
 def params_as_dict(params: TPostParams) -> dict:

@@ -239,9 +239,12 @@ def cmd_vision(a):
     import yaml
     from .vision.camera import Camera
     if a.vision_cmd == 'tposts':
-        from .vision.tposts import TPostParams, detect_image, observation_from_detections
+        from .vision.tposts import (TPostParams, add_distance_estimates, detect_image,
+                                    observation_from_detections)
         params = TPostParams(min_area=a.min_area)
         detections = detect_image(a.image, params=params, overlay=a.overlay or None)
+        detections = add_distance_estimates(
+            detections, object_height_m=a.post_height, focal_length_px=a.focal_length)
         print(json.dumps({
             'image': a.image,
             'detections': detections,
@@ -492,6 +495,10 @@ def main(argv=None):
     q.add_argument('image', help='RGB image, such as haltere_camera_frame.ppm')
     q.add_argument('--overlay', default='', help='write a copy with detection boxes drawn on it')
     q.add_argument('--min-area', type=int, default=20, help='minimum detected blob area in pixels')
+    q.add_argument('--post-height', type=float, default=3.0,
+                   help='physical height of the detected post in metres')
+    q.add_argument('--focal-length', type=float, default=214.0,
+                   help='vertical focal length in pixels; default matches the 80-degree synthetic camera at 640x360')
     q = vs.add_parser('audit', help='audit labelled flights and reject train/holdout overlap (including copied images)')
     q.add_argument('datasets', nargs='+')
     q.add_argument('--holdout', nargs='*', default=[])
