@@ -24,6 +24,17 @@ python scripts/setup.py --hardware cuda
 python scripts/setup.py --hardware rocm
 ```
 
+After publishing your fork, a peer can bootstrap everything from an empty
+directory with one command:
+
+```text
+python scripts/bootstrap.py --repo https://github.com/YOUR_ACCOUNT/haltere.git --hardware cpu
+```
+
+The bootstrap script clones the pinned Haltere branch, creates the environment,
+installs the selected PyTorch backend, installs Haltere's optional vision tools,
+and checks out the pinned GraphicsEngine renderer.
+
 Use `cpu` on Windows AMD systems. The official PyTorch ROCm wheels target Linux;
 use `rocm` only on a compatible Linux AMD system. `auto` is the safe default and
 also selects CPU. Use `--skip-graphics` when the renderer is not needed.
