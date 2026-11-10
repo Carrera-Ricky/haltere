@@ -111,6 +111,9 @@ def observation_from_detections(detections: list[dict]) -> dict:
             "pixel_height": 0.0,
             "pixel_width": 0.0,
             "distance_m": 0.0,
+            "direction_camera": [0.0, 0.0, 1.0],
+            "offset_right_m": 0.0,
+            "offset_down_m": 0.0,
             "side": "none",
         }
 
@@ -130,6 +133,9 @@ def observation_from_detections(detections: list[dict]) -> dict:
         "pixel_height": float(nearest["pixel_height"]),
         "pixel_width": float(width),
         "distance_m": float(nearest.get("distance_m", 0.0)),
+        "direction_camera": nearest.get("direction_camera", [0.0, 0.0, 1.0]),
+        "offset_right_m": float(nearest.get("offset_right_m", 0.0)),
+        "offset_down_m": float(nearest.get("offset_down_m", 0.0)),
         "side": side,
     }
 
@@ -158,6 +164,35 @@ def add_distance_estimates(detections: list[dict], object_height_m: float = 3.0,
         item = dict(detection)
         item["distance_m"] = estimate_distance_m(
             item["pixel_height"], object_height_m, focal_length_px)
+        out.append(item)
+    return out
+
+
+def add_camera_directions(detections: list[dict], image_width: int = 640,
+                          image_height: int = 360, focal_length_px: float = 214.0) -> list[dict]:
+    """Attach camera-frame rays and lateral/vertical offsets to detections.
+
+    Camera coordinates are ``(right, down, forward)``. Offsets are evaluated at
+    the detection's estimated forward distance, so they describe where the
+    post would be relative to the camera at that depth.
+    """
+    if image_width <= 0 or image_height <= 0 or focal_length_px <= 0:
+        raise ValueError("image dimensions and focal_length_px must be positive")
+    cx = image_width / 2.0
+    cy = image_height / 2.0
+    out = []
+    for detection in detections:
+        item = dict(detection)
+        px, py = item["center_px"]
+        ray = np.array([(float(px) - cx) / focal_length_px,
+                        (float(py) - cy) / focal_length_px, 1.0], dtype=np.float64)
+        ray /= np.linalg.norm(ray)
+        item["direction_camera"] = [float(v) for v in ray]
+        forward = float(item.get("distance_m", 0.0))
+        depth_component = max(float(ray[2]), 1e-9)
+        scale = forward / depth_component
+        item["offset_right_m"] = float(ray[0] * scale)
+        item["offset_down_m"] = float(ray[1] * scale)
         out.append(item)
     return out
 

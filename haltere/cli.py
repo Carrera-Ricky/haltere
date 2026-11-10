@@ -239,12 +239,14 @@ def cmd_vision(a):
     import yaml
     from .vision.camera import Camera
     if a.vision_cmd == 'tposts':
-        from .vision.tposts import (TPostParams, add_distance_estimates, detect_image,
+        from .vision.tposts import (TPostParams, add_camera_directions, add_distance_estimates, detect_image,
                                     observation_from_detections)
         params = TPostParams(min_area=a.min_area)
         detections = detect_image(a.image, params=params, overlay=a.overlay or None)
         detections = add_distance_estimates(
             detections, object_height_m=a.post_height, focal_length_px=a.focal_length)
+        detections = add_camera_directions(
+            detections, image_width=a.width, image_height=a.height, focal_length_px=a.focal_length)
         print(json.dumps({
             'image': a.image,
             'detections': detections,
@@ -252,7 +254,7 @@ def cmd_vision(a):
             'observation': observation_from_detections(detections),
         }, indent=2))
     elif a.vision_cmd == 'tpost-validate':
-        from .vision.tposts import (TPostParams, add_distance_estimates, detect_image,
+        from .vision.tposts import (TPostParams, add_camera_directions, add_distance_estimates, detect_image,
                                     focal_length_from_vertical_fov, validate_against_metadata)
         metadata_path = Path(a.metadata or str(Path(a.image).with_suffix('.json')))
         metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
@@ -262,6 +264,9 @@ def cmd_vision(a):
         detections = add_distance_estimates(
             detections, object_height_m=float(metadata['post_height_m']),
             focal_length_px=focal_length)
+        detections = add_camera_directions(
+            detections, image_width=int(metadata['image_width']),
+            image_height=int(metadata['image_height']), focal_length_px=focal_length)
         print(json.dumps({
             'image': a.image,
             'metadata': str(metadata_path),
@@ -517,6 +522,8 @@ def main(argv=None):
                    help='physical height of the detected post in metres')
     q.add_argument('--focal-length', type=float, default=214.0,
                    help='vertical focal length in pixels; default matches the 80-degree synthetic camera at 640x360')
+    q.add_argument('--width', type=int, default=640, help='image width in pixels')
+    q.add_argument('--height', type=int, default=360, help='image height in pixels')
     q = vs.add_parser('tpost-validate', help='compare T-post distance estimates with renderer ground truth metadata')
     q.add_argument('image', help='synthetic-camera image with a matching JSON sidecar')
     q.add_argument('--metadata', default='', help='ground-truth JSON sidecar (default: image name with .json suffix)')

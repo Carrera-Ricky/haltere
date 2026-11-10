@@ -1,6 +1,6 @@
 import numpy as np
 
-from haltere.vision.tposts import (detect_tposts, estimate_distance_m,
+from haltere.vision.tposts import (add_camera_directions, detect_tposts, estimate_distance_m,
                                    observation_from_detections)
 
 
@@ -39,9 +39,26 @@ def test_observation_handles_no_detection():
         "pixel_height": 0.0,
         "pixel_width": 0.0,
         "distance_m": 0.0,
+        "direction_camera": [0.0, 0.0, 1.0],
+        "offset_right_m": 0.0,
+        "offset_down_m": 0.0,
         "side": "none",
     }
 
 
 def test_distance_uses_pinhole_camera_relation():
     assert estimate_distance_m(50.0, object_height_m=3.0, focal_length_px=200.0) == 12.0
+
+
+def test_camera_direction_and_offset_are_consistent():
+    detections = [{
+        "center_px": [420.0, 180.0],
+        "distance_m": 10.0,
+    }]
+
+    result = add_camera_directions(detections, 640, 360, 200.0)[0]
+
+    assert result["direction_camera"][0] > 0.0
+    assert result["direction_camera"][2] > 0.0
+    assert result["offset_right_m"] > 0.0
+    assert abs(result["offset_down_m"]) < 1e-9
