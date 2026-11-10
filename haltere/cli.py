@@ -145,6 +145,43 @@ def cmd_eval_figure_eight(a):
     print(json.dumps(metrics, indent=2))
 
 
+def cmd_eval_figure_eight_visual(a):
+    import json
+    from collections import deque
+    import torch
+    from .train.bptt import load_checkpoint, make_world
+    from .sim.figure_eight import load_route
+    from .sim.visual_figure_eight import VisualFigureEightTask
+
+    brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
+    device = brain.device
+    vehicle, _ = make_world(cfg, a.batch, device)
+    task = VisualFigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
+                                 speed=a.speed, post_height=a.post_height,
+                                 crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius)
+    vs = vehicle.wrap(task.reset_all())
+    bs = brain.init_state(a.batch)
+    W = brain.weight_matrix()
+    delay = deque([torch.zeros(a.batch, brain.n_actions, device=device)
+                   for _ in range(cfg.train.delay_steps)])
+    total = torch.zeros(a.batch, device=device)
+    crashed_ever = torch.zeros(a.batch, dtype=torch.bool, device=device)
+    for _ in range(a.steps):
+        obs = task.observe(vs.quad)
+        act, bs, _ = brain(obs, bs, W)
+        delay.append(act)
+        action = delay.popleft()
+        vs = vehicle.step(vs, action)
+        total += task.cost(vs.quad, action)
+        crashed_ever |= vs.quad.crashed
+        task.tick(vs.quad)
+    metrics = task.metrics(vs.quad)
+    metrics.update({"cost": float((total / a.steps).mean()),
+                    "crashed_ever": float(crashed_ever.float().mean()),
+                    "observation_source": "oracle_visual_bridge"})
+    print(json.dumps(metrics, indent=2))
+
+
 def cmd_summarize(a):
     import csv
     import json
@@ -485,6 +522,19 @@ def main(argv=None):
                    help='effective collision radius around the pole/crossbar centreline (m)')
     s.add_argument('--device', default='cpu')
     s.set_defaults(fn=cmd_eval_figure_eight)
+
+    s = sp.add_parser('eval-figure-eight-visual',
+                      help='evaluate using the body-frame visual goal contract (oracle bridge)')
+    s.add_argument('ckpt')
+    s.add_argument('--route', default='configs/two_post_figure8.yaml')
+    s.add_argument('--steps', type=int, default=2400)
+    s.add_argument('--batch', type=int, default=1)
+    s.add_argument('--speed', type=float, default=1.5)
+    s.add_argument('--post-height', type=float, default=3.0)
+    s.add_argument('--crossbar-width', type=float, default=2.0)
+    s.add_argument('--tpost-radius', type=float, default=0.35)
+    s.add_argument('--device', default='cpu')
+    s.set_defaults(fn=cmd_eval_figure_eight_visual)
 
     s = sp.add_parser('publish-hf', help='upload artifacts/, the flight graph and the model card to Hugging Face')
     s.add_argument('--repo', default='', help='model repo id (default: <your account>/haltere)')
