@@ -1,6 +1,6 @@
 import numpy as np
 
-from haltere.vision.tposts import (add_camera_directions, detect_tposts, estimate_distance_m,
+from haltere.vision.tposts import (add_body_observations, add_camera_directions, detect_tposts, estimate_distance_m,
                                    observation_from_detections)
 
 
@@ -62,3 +62,16 @@ def test_camera_direction_and_offset_are_consistent():
     assert result["direction_camera"][2] > 0.0
     assert result["offset_right_m"] > 0.0
     assert abs(result["offset_down_m"]) < 1e-9
+
+
+def test_body_observation_has_forward_left_up_axes():
+    detections = add_camera_directions([{
+        "center_px": [320.0, 180.0],
+        "distance_m": 10.0,
+    }], 640, 360, 200.0)
+
+    result = add_body_observations(detections, tilt_deg=30.0)[0]
+
+    assert result["direction_body"][0] > 0.0
+    assert abs(result["offset_left_m"]) < 1e-9
+    assert result["offset_forward_m"] > 0.0

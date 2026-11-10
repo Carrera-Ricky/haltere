@@ -197,6 +197,34 @@ def add_camera_directions(detections: list[dict], image_width: int = 640,
     return out
 
 
+def add_body_observations(detections: list[dict], tilt_deg: float = 30.0) -> list[dict]:
+    """Transform camera-frame rays/offsets into Haltere's body frame.
+
+    Camera coordinates are ``(right, down, forward)``. Haltere's body frame is
+    ``(forward, left, up)``. The mounting tilt follows ``vision.camera.Camera``.
+    """
+    from .camera import body_to_cam_matrix
+
+    body_from_camera = body_to_cam_matrix(tilt_deg)
+    out = []
+    for detection in detections:
+        item = dict(detection)
+        camera_direction = np.asarray(item["direction_camera"], dtype=np.float64)
+        body_direction = camera_direction @ body_from_camera
+        camera_offset = np.array([
+            float(item["offset_right_m"]),
+            float(item["offset_down_m"]),
+            float(item["distance_m"]),
+        ])
+        body_offset = camera_offset @ body_from_camera
+        item["direction_body"] = [float(v) for v in body_direction]
+        item["offset_forward_m"] = float(body_offset[0])
+        item["offset_left_m"] = float(body_offset[1])
+        item["offset_up_m"] = float(body_offset[2])
+        out.append(item)
+    return out
+
+
 def focal_length_from_vertical_fov(image_height: int, vertical_fov_deg: float) -> float:
     """Return vertical focal length in pixels for a pinhole image model."""
     return float((image_height / 2.0) / math.tan(math.radians(vertical_fov_deg) / 2.0))
