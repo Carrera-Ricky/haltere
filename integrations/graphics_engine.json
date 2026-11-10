@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/Carrera-Ricky/GraphicsEngine.git",
-  "ref": "453e5a6",
+  "ref": "3ae7d01",
   "branch": "feature/haltere-synthetic-camera",
   "directory": "integrations/GraphicsEngine",
   "description": "OpenGL synthetic-camera renderer used by the Haltere visual pipeline."

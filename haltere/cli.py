@@ -251,6 +251,24 @@ def cmd_vision(a):
             'count': len(detections),
             'observation': observation_from_detections(detections),
         }, indent=2))
+    elif a.vision_cmd == 'tpost-validate':
+        from .vision.tposts import (TPostParams, add_distance_estimates, detect_image,
+                                    focal_length_from_vertical_fov, validate_against_metadata)
+        metadata_path = Path(a.metadata or str(Path(a.image).with_suffix('.json')))
+        metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+        focal_length = focal_length_from_vertical_fov(
+            int(metadata['image_height']), float(metadata['camera_vertical_fov_deg']))
+        detections = detect_image(a.image, params=TPostParams(min_area=a.min_area))
+        detections = add_distance_estimates(
+            detections, object_height_m=float(metadata['post_height_m']),
+            focal_length_px=focal_length)
+        print(json.dumps({
+            'image': a.image,
+            'metadata': str(metadata_path),
+            'focal_length_px': focal_length,
+            'detections': detections,
+            'validation': validate_against_metadata(detections, metadata),
+        }, indent=2))
     elif a.vision_cmd == 'audit':
         from .vision.datasets import audit_split
         report = audit_split(a.datasets, a.holdout)
@@ -499,6 +517,10 @@ def main(argv=None):
                    help='physical height of the detected post in metres')
     q.add_argument('--focal-length', type=float, default=214.0,
                    help='vertical focal length in pixels; default matches the 80-degree synthetic camera at 640x360')
+    q = vs.add_parser('tpost-validate', help='compare T-post distance estimates with renderer ground truth metadata')
+    q.add_argument('image', help='synthetic-camera image with a matching JSON sidecar')
+    q.add_argument('--metadata', default='', help='ground-truth JSON sidecar (default: image name with .json suffix)')
+    q.add_argument('--min-area', type=int, default=20)
     q = vs.add_parser('audit', help='audit labelled flights and reject train/holdout overlap (including copied images)')
     q.add_argument('datasets', nargs='+')
     q.add_argument('--holdout', nargs='*', default=[])

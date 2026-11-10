@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from pathlib import Path
+import math
 
 import cv2
 import numpy as np
@@ -158,6 +159,39 @@ def add_distance_estimates(detections: list[dict], object_height_m: float = 3.0,
         item["distance_m"] = estimate_distance_m(
             item["pixel_height"], object_height_m, focal_length_px)
         out.append(item)
+    return out
+
+
+def focal_length_from_vertical_fov(image_height: int, vertical_fov_deg: float) -> float:
+    """Return vertical focal length in pixels for a pinhole image model."""
+    return float((image_height / 2.0) / math.tan(math.radians(vertical_fov_deg) / 2.0))
+
+
+def validate_against_metadata(detections: list[dict], metadata: dict) -> list[dict]:
+    """Pair detections with renderer ground truth and report range errors."""
+    camera = np.asarray(metadata["camera_position"], dtype=np.float64)
+    forward = np.asarray(metadata["camera_forward"], dtype=np.float64)
+    forward /= np.linalg.norm(forward)
+    right = np.cross(forward, np.array([0.0, 1.0, 0.0]))
+    right /= np.linalg.norm(right)
+    posts = [np.asarray(p, dtype=np.float64) for p in metadata["post_positions"]]
+    posts.sort(key=lambda p: float(np.dot(p - camera, right)))
+    detections = sorted(detections, key=lambda d: d["center_x"])
+
+    out = []
+    for detection, post in zip(detections, posts):
+        delta = post - camera
+        expected_forward = float(np.dot(delta, forward))
+        expected_range = float(np.linalg.norm(delta))
+        estimated = float(detection["distance_m"])
+        out.append({
+            "center_x": float(detection["center_x"]),
+            "estimated_forward_m": estimated,
+            "expected_forward_m": expected_forward,
+            "expected_range_m": expected_range,
+            "error_m": estimated - expected_forward,
+            "error_pct": 100.0 * (estimated - expected_forward) / expected_forward,
+        })
     return out
 
 
