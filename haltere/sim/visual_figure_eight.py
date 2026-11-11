@@ -32,16 +32,22 @@ def body_observation_to_tensor(observation: dict, B: int, device) -> torch.Tenso
 class VisualFigureEightTask(FigureEightTask):
     """Use a post-relative body-frame goal instead of the route target vector."""
 
-    def __init__(self, *args, camera=None, camera_every: int = 1, **kwargs):
+    def __init__(self, *args, camera=None, camera_every: int = 1,
+                 camera_hold_steps: int = 15, **kwargs):
         super().__init__(*args, **kwargs)
         self.camera = camera
         self.camera_every = max(1, int(camera_every))
+        self.camera_hold_steps = max(0, int(camera_hold_steps))
         self.camera_step = 0
         self.last_camera_rel_b = None
+        self.camera_lost_steps = 0
+        self.camera_reacquisitions = 0
 
     def reset_all(self, difficulty=None):
         self.camera_step = 0
         self.last_camera_rel_b = None
+        self.camera_lost_steps = 0
+        self.camera_reacquisitions = 0
         return super().reset_all(difficulty)
 
     def observe(self, st, rel_b: torch.Tensor | None = None):
@@ -56,13 +62,30 @@ class VisualFigureEightTask(FigureEightTask):
                 from ..vision.tposts import body_offset_from_observation
                 detected = body_offset_from_observation(observation)
                 if detected is None:
-                    raise RuntimeError("synthetic camera lost both T-posts")
-                self.last_camera_rel_b = torch.as_tensor(
-                    detected, dtype=torch.float32, device=st.pos.device)[None]
-            rel_b = self.last_camera_rel_b.expand(self.B, -1)
+                    self.camera_lost_steps += 1
+                else:
+                    if self.camera_lost_steps > 0:
+                        self.camera_reacquisitions += 1
+                    self.camera_lost_steps = 0
+                    self.last_camera_rel_b = torch.as_tensor(
+                        detected, dtype=torch.float32, device=st.pos.device)[None]
+            if self.last_camera_rel_b is None or self.camera_lost_steps > self.camera_hold_steps:
+                # No target has ever been seen, or the last target is too old:
+                # neutralize the visual goal rather than inventing a direction.
+                rel_b = torch.zeros((self.B, 3), dtype=torch.float32, device=st.pos.device)
+            else:
+                rel_b = self.last_camera_rel_b.expand(self.B, -1)
             self.camera_step += 1
         elif rel_b is None:
             post = select_visual_post(self.target, self.posts)
             rel_b = rotate_inv(st.quat, post - st.pos)
         return observe_from_sensors(
             sensors, self.target, st.motor.mean(dim=1, keepdim=True), self.cfg, rel_b=rel_b)
+
+    def metrics(self, st):
+        metrics = super().metrics(st)
+        metrics.update({
+            "camera_lost_steps": float(self.camera_lost_steps),
+            "camera_reacquisitions": float(self.camera_reacquisitions),
+        })
+        return metrics

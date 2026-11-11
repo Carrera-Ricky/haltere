@@ -161,7 +161,8 @@ def cmd_eval_figure_eight_visual(a):
     task = VisualFigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
                                  speed=a.speed, post_height=a.post_height,
                                  crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius,
-                                 camera=camera, camera_every=a.camera_every)
+                                 camera=camera, camera_every=a.camera_every,
+                                 camera_hold_steps=a.camera_hold_steps)
     vs = vehicle.wrap(task.reset_all())
     bs = brain.init_state(a.batch)
     W = brain.weight_matrix()
@@ -540,6 +541,8 @@ def main(argv=None):
                    help='GraphicsEngine working directory for closed-loop synthetic camera mode')
     s.add_argument('--camera-every', type=int, default=3,
                    help='simulation steps between synthetic camera frames')
+    s.add_argument('--camera-hold-steps', type=int, default=15,
+                   help='steps to hold the last visual target after detection is lost')
     s.add_argument('--device', default='cpu')
     s.set_defaults(fn=cmd_eval_figure_eight_visual)
 
