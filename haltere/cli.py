@@ -71,6 +71,15 @@ def cmd_train(a):
     print(f'run directory: {run_dir}')
 
 
+def cmd_train_figure_eight_visual(a):
+    from .train.visual_figure_eight import fine_tune
+    out = fine_tune(
+        a.ckpt, a.route, a.out, iters=a.iters, steps=a.steps, batch=a.batch,
+        lr=a.lr, device=a.device, speed=a.speed, post_height=a.post_height,
+        crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius)
+    print(f'run directory: {out}')
+
+
 def cmd_imitate(a):
     from .config import load_yaml, dataclass_from_dict
     from .train.bptt import ExperimentConfig
@@ -492,6 +501,22 @@ def main(argv=None):
     s.add_argument('--device', default='')
     s.add_argument('--resume', default=None)
     s.set_defaults(fn=cmd_train)
+
+    s = sp.add_parser('train-figure-eight-visual',
+                      help='fine-tune a checkpoint on the body-frame visual figure-eight contract')
+    s.add_argument('ckpt')
+    s.add_argument('--route', default='configs/two_post_figure8.yaml')
+    s.add_argument('--out', default='runs/visual-figure-eight')
+    s.add_argument('--iters', type=int, default=100)
+    s.add_argument('--steps', type=int, default=600)
+    s.add_argument('--batch', type=int, default=8)
+    s.add_argument('--lr', type=float, default=1e-5)
+    s.add_argument('--speed', type=float, default=1.5)
+    s.add_argument('--post-height', type=float, default=3.0)
+    s.add_argument('--crossbar-width', type=float, default=2.0)
+    s.add_argument('--tpost-radius', type=float, default=0.35)
+    s.add_argument('--device', default='cpu')
+    s.set_defaults(fn=cmd_train_figure_eight_visual)
 
     s = sp.add_parser('imitate', help='train the brain to imitate a working controller (e.g. the MLP baseline)')
     s.add_argument('--config', default='configs/train.yaml')
