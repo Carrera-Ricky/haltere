@@ -29,6 +29,12 @@ def body_observation_to_tensor(observation: dict, B: int, device) -> torch.Tenso
     return torch.as_tensor(rel_b, dtype=torch.float32, device=device).expand(B, -1).clone()
 
 
+def search_yaw_for_frame(frame: int, period: int = 30, magnitude: float = 0.24) -> float:
+    """Return an alternating yaw stick for a bounded visual reacquisition sweep."""
+    period = max(1, int(period))
+    return -abs(float(magnitude)) if (int(frame) // period) % 2 == 0 else abs(float(magnitude))
+
+
 class VisualFigureEightTask(FigureEightTask):
     """Use a post-relative body-frame goal instead of the route target vector."""
 
@@ -41,13 +47,17 @@ class VisualFigureEightTask(FigureEightTask):
         self.camera_step = 0
         self.last_camera_rel_b = None
         self.camera_lost_steps = 0
+        self.camera_lost_total_steps = 0
         self.camera_reacquisitions = 0
+        self.camera_searching = False
 
     def reset_all(self, difficulty=None):
         self.camera_step = 0
         self.last_camera_rel_b = None
         self.camera_lost_steps = 0
+        self.camera_lost_total_steps = 0
         self.camera_reacquisitions = 0
+        self.camera_searching = False
         return super().reset_all(difficulty)
 
     def observe(self, st, rel_b: torch.Tensor | None = None):
@@ -63,13 +73,15 @@ class VisualFigureEightTask(FigureEightTask):
                 detected = body_offset_from_observation(observation)
                 if detected is None:
                     self.camera_lost_steps += 1
+                    self.camera_lost_total_steps += 1
                 else:
                     if self.camera_lost_steps > 0:
                         self.camera_reacquisitions += 1
                     self.camera_lost_steps = 0
                     self.last_camera_rel_b = torch.as_tensor(
                         detected, dtype=torch.float32, device=st.pos.device)[None]
-            if self.last_camera_rel_b is None or self.camera_lost_steps > self.camera_hold_steps:
+            self.camera_searching = self.camera_lost_steps > self.camera_hold_steps
+            if self.last_camera_rel_b is None or self.camera_searching:
                 # No target has ever been seen, or the last target is too old:
                 # neutralize the visual goal rather than inventing a direction.
                 rel_b = torch.zeros((self.B, 3), dtype=torch.float32, device=st.pos.device)
@@ -86,6 +98,7 @@ class VisualFigureEightTask(FigureEightTask):
         metrics = super().metrics(st)
         metrics.update({
             "camera_lost_steps": float(self.camera_lost_steps),
+            "camera_lost_total_steps": float(self.camera_lost_total_steps),
             "camera_reacquisitions": float(self.camera_reacquisitions),
         })
         return metrics

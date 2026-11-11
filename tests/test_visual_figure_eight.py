@@ -2,7 +2,8 @@ import torch
 
 import pytest
 
-from haltere.sim.visual_figure_eight import body_observation_to_tensor, select_visual_post
+from haltere.sim.visual_figure_eight import (body_observation_to_tensor, search_yaw_for_frame,
+                                             select_visual_post)
 
 
 def test_select_visual_post_chooses_nearest_route_post():
@@ -30,3 +31,9 @@ def test_body_observation_to_tensor_preserves_body_axes():
 def test_body_observation_to_tensor_rejects_missing_post():
     with pytest.raises(ValueError, match="no visible post"):
         body_observation_to_tensor({"visible": False}, B=1, device="cpu")
+
+
+def test_search_yaw_alternates_directions():
+    assert search_yaw_for_frame(0, period=3, magnitude=0.2) == -0.2
+    assert search_yaw_for_frame(2, period=3, magnitude=0.2) == -0.2
+    assert search_yaw_for_frame(3, period=3, magnitude=0.2) == 0.2

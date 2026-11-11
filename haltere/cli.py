@@ -160,7 +160,7 @@ def cmd_eval_figure_eight_visual(a):
     import torch
     from .train.bptt import load_checkpoint, make_world
     from .sim.figure_eight import load_route
-    from .sim.visual_figure_eight import VisualFigureEightTask
+    from .sim.visual_figure_eight import VisualFigureEightTask, search_yaw_for_frame
     from .vision.synthetic_camera import SyntheticCameraClient
 
     brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
@@ -182,6 +182,10 @@ def cmd_eval_figure_eight_visual(a):
     for _ in range(a.steps):
         obs = task.observe(vs.quad)
         act, bs, _ = brain(obs, bs, W)
+        if camera and task.camera_searching:
+            act = act.clone()
+            act[:, 3] = search_yaw_for_frame(
+                task.camera_step, a.search_period, a.search_yaw)
         delay.append(act)
         action = delay.popleft()
         vs = vehicle.step(vs, action)
@@ -568,6 +572,10 @@ def main(argv=None):
                    help='simulation steps between synthetic camera frames')
     s.add_argument('--camera-hold-steps', type=int, default=15,
                    help='steps to hold the last visual target after detection is lost')
+    s.add_argument('--search-period', type=int, default=30,
+                   help='camera frames per direction during visual reacquisition')
+    s.add_argument('--search-yaw', type=float, default=0.24,
+                   help='yaw-stick magnitude used during visual reacquisition')
     s.add_argument('--device', default='cpu')
     s.set_defaults(fn=cmd_eval_figure_eight_visual)
 
