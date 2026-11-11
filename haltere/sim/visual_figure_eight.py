@@ -19,12 +19,23 @@ def select_visual_post(target: torch.Tensor, posts: torch.Tensor) -> torch.Tenso
     return posts[index]
 
 
+def body_observation_to_tensor(observation: dict, B: int, device) -> torch.Tensor:
+    """Convert one detector observation into batched ``(forward,left,up)``."""
+    from ..vision.tposts import body_offset_from_observation
+
+    rel_b = body_offset_from_observation(observation)
+    if rel_b is None:
+        raise ValueError("cannot control from a visual observation with no visible post")
+    return torch.as_tensor(rel_b, dtype=torch.float32, device=device).expand(B, -1).clone()
+
+
 class VisualFigureEightTask(FigureEightTask):
     """Use a post-relative body-frame goal instead of the route target vector."""
 
-    def observe(self, st):
+    def observe(self, st, rel_b: torch.Tensor | None = None):
         sensors = self.sim.sensors(st)
-        post = select_visual_post(self.target, self.posts)
-        rel_b = rotate_inv(st.quat, post - st.pos)
+        if rel_b is None:
+            post = select_visual_post(self.target, self.posts)
+            rel_b = rotate_inv(st.quat, post - st.pos)
         return observe_from_sensors(
             sensors, self.target, st.motor.mean(dim=1, keepdim=True), self.cfg, rel_b=rel_b)

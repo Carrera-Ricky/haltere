@@ -112,8 +112,12 @@ def observation_from_detections(detections: list[dict]) -> dict:
             "pixel_width": 0.0,
             "distance_m": 0.0,
             "direction_camera": [0.0, 0.0, 1.0],
+            "direction_body": [1.0, 0.0, 0.0],
             "offset_right_m": 0.0,
             "offset_down_m": 0.0,
+            "offset_forward_m": 0.0,
+            "offset_left_m": 0.0,
+            "offset_up_m": 0.0,
             "side": "none",
         }
 
@@ -134,10 +138,27 @@ def observation_from_detections(detections: list[dict]) -> dict:
         "pixel_width": float(width),
         "distance_m": float(nearest.get("distance_m", 0.0)),
         "direction_camera": nearest.get("direction_camera", [0.0, 0.0, 1.0]),
+        "direction_body": nearest.get("direction_body", [1.0, 0.0, 0.0]),
         "offset_right_m": float(nearest.get("offset_right_m", 0.0)),
         "offset_down_m": float(nearest.get("offset_down_m", 0.0)),
+        "offset_forward_m": float(nearest.get("offset_forward_m", 0.0)),
+        "offset_left_m": float(nearest.get("offset_left_m", 0.0)),
+        "offset_up_m": float(nearest.get("offset_up_m", 0.0)),
         "side": side,
     }
+
+
+def body_offset_from_observation(observation: dict) -> np.ndarray | None:
+    """Return a visible post as Haltere body-frame ``(forward, left, up)``."""
+    if not observation.get("visible", False):
+        return None
+    keys = ("offset_forward_m", "offset_left_m", "offset_up_m")
+    if not all(key in observation for key in keys):
+        raise ValueError("observation is missing body-frame offsets")
+    result = np.asarray([observation[key] for key in keys], dtype=np.float32)
+    if not np.all(np.isfinite(result)):
+        raise ValueError("observation contains non-finite body-frame offsets")
+    return result
 
 
 def estimate_distance_m(pixel_height: float, object_height_m: float = 3.0,

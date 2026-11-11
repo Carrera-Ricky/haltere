@@ -1,7 +1,7 @@
 import numpy as np
 
-from haltere.vision.tposts import (add_body_observations, add_camera_directions, detect_tposts, estimate_distance_m,
-                                   observation_from_detections)
+from haltere.vision.tposts import (add_body_observations, add_camera_directions, body_offset_from_observation,
+                                   detect_tposts, estimate_distance_m, observation_from_detections)
 
 
 def test_tpost_detection_merges_pole_and_crossbar():
@@ -40,10 +40,28 @@ def test_observation_handles_no_detection():
         "pixel_width": 0.0,
         "distance_m": 0.0,
         "direction_camera": [0.0, 0.0, 1.0],
+        "direction_body": [1.0, 0.0, 0.0],
         "offset_right_m": 0.0,
         "offset_down_m": 0.0,
+        "offset_forward_m": 0.0,
+        "offset_left_m": 0.0,
+        "offset_up_m": 0.0,
         "side": "none",
     }
+
+
+def test_body_offset_from_observation_returns_forward_left_up():
+    observation = observation_from_detections([{
+        "bbox": [0, 0, 4, 20],
+        "center_x": 0.0,
+        "center_y": 0.0,
+        "pixel_height": 20,
+        "offset_forward_m": 10.0,
+        "offset_left_m": 2.0,
+        "offset_up_m": 1.0,
+    }])
+
+    np.testing.assert_allclose(body_offset_from_observation(observation), [10.0, 2.0, 1.0])
 
 
 def test_distance_uses_pinhole_camera_relation():
