@@ -129,6 +129,7 @@ def cmd_eval_figure_eight(a):
     brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
     device = brain.device
     vehicle, _ = make_world(cfg, a.batch, device)
+    hover_stick = 2.0 * vehicle.sim.hover_command() - 1.0
     task = FigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
                            speed=a.speed, post_height=a.post_height,
                            crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius)
@@ -184,6 +185,8 @@ def cmd_eval_figure_eight_visual(a):
         act, bs, _ = brain(obs, bs, W)
         if camera and task.camera_searching:
             act = act.clone()
+            act[:, 0] = hover_stick
+            act[:, 1:3] = 0.0
             act[:, 3] = search_yaw_for_frame(
                 task.camera_step, a.search_period, a.search_yaw)
         delay.append(act)
