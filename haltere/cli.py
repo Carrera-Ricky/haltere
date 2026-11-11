@@ -152,13 +152,16 @@ def cmd_eval_figure_eight_visual(a):
     from .train.bptt import load_checkpoint, make_world
     from .sim.figure_eight import load_route
     from .sim.visual_figure_eight import VisualFigureEightTask
+    from .vision.synthetic_camera import SyntheticCameraClient
 
     brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
     device = brain.device
     vehicle, _ = make_world(cfg, a.batch, device)
+    camera = SyntheticCameraClient(a.camera_dir) if a.camera_dir else None
     task = VisualFigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
                                  speed=a.speed, post_height=a.post_height,
-                                 crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius)
+                                 crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius,
+                                 camera=camera, camera_every=a.camera_every)
     vs = vehicle.wrap(task.reset_all())
     bs = brain.init_state(a.batch)
     W = brain.weight_matrix()
@@ -178,7 +181,7 @@ def cmd_eval_figure_eight_visual(a):
     metrics = task.metrics(vs.quad)
     metrics.update({"cost": float((total / a.steps).mean()),
                     "crashed_ever": float(crashed_ever.float().mean()),
-                    "observation_source": "oracle_visual_bridge"})
+                    "observation_source": "synthetic_camera" if camera else "oracle_visual_bridge"})
     print(json.dumps(metrics, indent=2))
 
 
@@ -533,6 +536,10 @@ def main(argv=None):
     s.add_argument('--post-height', type=float, default=3.0)
     s.add_argument('--crossbar-width', type=float, default=2.0)
     s.add_argument('--tpost-radius', type=float, default=0.35)
+    s.add_argument('--camera-dir', default=None,
+                   help='GraphicsEngine working directory for closed-loop synthetic camera mode')
+    s.add_argument('--camera-every', type=int, default=3,
+                   help='simulation steps between synthetic camera frames')
     s.add_argument('--device', default='cpu')
     s.set_defaults(fn=cmd_eval_figure_eight_visual)
 
