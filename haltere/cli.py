@@ -186,7 +186,12 @@ def cmd_eval_figure_eight_visual(a):
         if camera and task.camera_searching:
             act = act.clone()
             act[:, 0] = hover_stick
-            act[:, 1:3] = 0.0
+            search_sensors = vehicle.sim.sensors(vs.quad, noise=False)
+            velocity_body = search_sensors['vel_body']
+            act[:, 1] = (a.search_brake_gain * velocity_body[:, 1]).clamp(-a.search_brake_limit,
+                                                                            a.search_brake_limit)
+            act[:, 2] = (-a.search_brake_gain * velocity_body[:, 0]).clamp(-a.search_brake_limit,
+                                                                             a.search_brake_limit)
             act[:, 3] = search_yaw_for_frame(
                 task.camera_step, a.search_period, a.search_yaw)
         delay.append(act)
@@ -579,6 +584,10 @@ def main(argv=None):
                    help='camera frames per direction during visual reacquisition')
     s.add_argument('--search-yaw', type=float, default=0.24,
                    help='yaw-stick magnitude used during visual reacquisition')
+    s.add_argument('--search-brake-gain', type=float, default=0.35,
+                   help='body-velocity braking gain during visual reacquisition')
+    s.add_argument('--search-brake-limit', type=float, default=0.5,
+                   help='maximum roll/pitch stick used for search braking')
     s.add_argument('--device', default='cpu')
     s.set_defaults(fn=cmd_eval_figure_eight_visual)
 
