@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import time
 
@@ -62,7 +63,7 @@ class SyntheticCameraClient:
             np.sin(np.deg2rad(self.tilt_deg))], dtype=np.float64)
         camera_forward_sim = rotation @ camera_forward_body
         image = self.request_frame(position_sim, camera_forward_sim)
-        metadata = __import__("json").loads(self.metadata_path.read_text(encoding="utf-8"))
+        metadata = self._read_metadata_after_capture()
         focal_length = focal_length_from_vertical_fov(
             int(metadata["image_height"]), float(metadata["camera_vertical_fov_deg"]))
         detections = detect_image(image, params=self.params)
@@ -72,3 +73,15 @@ class SyntheticCameraClient:
             detections, int(metadata["image_width"]), int(metadata["image_height"]), focal_length)
         detections = add_body_observations(detections, self.tilt_deg)
         return observation_from_detections(detections)
+
+    def _read_metadata_after_capture(self) -> dict:
+        """Wait for the renderer's non-atomic JSON write to finish."""
+        deadline = time.monotonic() + self.timeout_s
+        last_error = None
+        while time.monotonic() < deadline:
+            try:
+                return json.loads(self.metadata_path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, PermissionError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                last_error = error
+                time.sleep(self.poll_s)
+        raise TimeoutError(f"synthetic camera metadata was not readable: {self.metadata_path}") from last_error
