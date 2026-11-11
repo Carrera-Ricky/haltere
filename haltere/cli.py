@@ -129,7 +129,6 @@ def cmd_eval_figure_eight(a):
     brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
     device = brain.device
     vehicle, _ = make_world(cfg, a.batch, device)
-    hover_stick = 2.0 * vehicle.sim.hover_command() - 1.0
     task = FigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
                            speed=a.speed, post_height=a.post_height,
                            crossbar_width=a.crossbar_width, tpost_radius=a.tpost_radius)
@@ -167,6 +166,7 @@ def cmd_eval_figure_eight_visual(a):
     brain, cfg, _ = load_checkpoint(a.ckpt, a.device)
     device = brain.device
     vehicle, _ = make_world(cfg, a.batch, device)
+    hover_stick = 2.0 * vehicle.sim.hover_command() - 1.0
     camera = SyntheticCameraClient(a.camera_dir) if a.camera_dir else None
     task = VisualFigureEightTask(cfg.task, vehicle.sim, load_route(a.route), a.batch, device,
                                  speed=a.speed, post_height=a.post_height,
