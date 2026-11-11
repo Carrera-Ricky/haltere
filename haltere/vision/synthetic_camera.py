@@ -35,7 +35,7 @@ class SyntheticCameraClient:
         self.poll_s = float(poll_s)
         self.params = params or TPostParams()
 
-    def request_frame(self, position_sim: np.ndarray, forward_sim: np.ndarray) -> Path:
+    def request_frame(self, position_sim: np.ndarray, forward_sim: np.ndarray) -> tuple[Path, np.ndarray]:
         """Send one camera pose and wait for the renderer to refresh its frame."""
         position = sim_to_renderer(position_sim)
         forward = sim_to_renderer(forward_sim)
@@ -51,7 +51,7 @@ class SyntheticCameraClient:
         deadline = time.monotonic() + self.timeout_s
         while time.monotonic() < deadline:
             if self.frame_path.exists() and self.frame_path.stat().st_mtime_ns > before:
-                return self.frame_path
+                return self.frame_path, position
             time.sleep(self.poll_s)
         raise TimeoutError(f"synthetic camera did not refresh {self.frame_path}")
 
@@ -62,8 +62,8 @@ class SyntheticCameraClient:
             np.cos(np.deg2rad(self.tilt_deg)), 0.0,
             np.sin(np.deg2rad(self.tilt_deg))], dtype=np.float64)
         camera_forward_sim = rotation @ camera_forward_body
-        image = self.request_frame(position_sim, camera_forward_sim)
-        metadata = self._read_metadata_after_capture()
+        image, expected_position = self.request_frame(position_sim, camera_forward_sim)
+        metadata = self._read_metadata_after_capture(expected_position)
         focal_length = focal_length_from_vertical_fov(
             int(metadata["image_height"]), float(metadata["camera_vertical_fov_deg"]))
         detections = detect_image(image, params=self.params)
@@ -74,14 +74,23 @@ class SyntheticCameraClient:
         detections = add_body_observations(detections, self.tilt_deg)
         return observation_from_detections(detections)
 
-    def _read_metadata_after_capture(self) -> dict:
+    def _read_metadata_after_capture(self, expected_position: np.ndarray) -> dict:
         """Wait for the renderer's non-atomic JSON write to finish."""
         deadline = time.monotonic() + self.timeout_s
         last_error = None
         while time.monotonic() < deadline:
             try:
-                return json.loads(self.metadata_path.read_text(encoding="utf-8"))
+                metadata = json.loads(self.metadata_path.read_text(encoding="utf-8"))
+                actual_position = np.asarray(metadata["camera_position"], dtype=np.float64)
+                if np.linalg.norm(actual_position - expected_position) > 1e-3:
+                    raise ValueError(
+                        f"renderer pose mismatch: expected {expected_position.tolist()}, "
+                        f"got {actual_position.tolist()}")
+                return metadata
             except (FileNotFoundError, PermissionError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                last_error = error
+                time.sleep(self.poll_s)
+            except (KeyError, TypeError, ValueError) as error:
                 last_error = error
                 time.sleep(self.poll_s)
         raise TimeoutError(f"synthetic camera metadata was not readable: {self.metadata_path}") from last_error
